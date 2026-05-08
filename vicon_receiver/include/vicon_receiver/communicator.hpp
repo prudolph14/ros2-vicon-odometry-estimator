@@ -1,3 +1,8 @@
+// Original work Copyright (c) 2024 OPT4SMART (Andrea Testa)
+// Modified work Copyright (c) 2026 prudolph
+//
+// This file is part of vicon_odometry_estimator (GPL-3.0).
+
 #if !defined(COMMUNICATOR_HPP)
 #define COMMUNICATOR_HPP
 
@@ -33,6 +38,8 @@ private:
     string hostname;
     unsigned int buffer_size;
     string ns_name;
+    double cutoff_hz_;
+    bool debug_;
     map<string, Publisher> pub_map;
     boost::mutex mutex;
     std::set<std::string> pending_publishers;

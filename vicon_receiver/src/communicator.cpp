@@ -1,9 +1,14 @@
+// Original work Copyright (c) 2024 OPT4SMART (Andrea Testa)
+// Modified work Copyright (c) 2026 prudolph
+//
+// This file is part of vicon_odometry_estimator (GPL-3.0).
+
 #include "vicon_receiver/communicator.hpp"
 
 using namespace ViconDataStreamSDK::CPP;
 
 // Constructor for the Communicator class
-Communicator::Communicator() : Node("vicon_client")
+Communicator::Communicator() : Node("vicon_odometry_estimator")
 {
     // Declare parameters for hostname, buffer size, and namespace
     this->declare_parameter<std::string>("hostname", "127.0.0.1");
@@ -14,6 +19,11 @@ Communicator::Communicator() : Node("vicon_client")
     this->declare_parameter<std::vector<double>>("map_xyz",  {0.0, 0.0, 0.0});
     this->declare_parameter<std::vector<double>>("map_rpy",  {0.0, 0.0, 0.0});
     this->declare_parameter<bool>("map_rpy_in_degrees", false);
+    // State estimator parameters: low-pass cutoff (Hz, <=0 disables) and a
+    // debug flag that publishes the unfiltered twist alongside the filtered
+    // Odometry, so phase lag vs noise can be inspected in rqt.
+    this->declare_parameter<double>("cutoff_hz", 30.0);
+    this->declare_parameter<bool>("debug", false);
 
     // Retrieve parameters values
     this->get_parameter("hostname", hostname);
@@ -25,6 +35,8 @@ Communicator::Communicator() : Node("vicon_client")
     this->get_parameter("map_xyz", map_xyz);
     this->get_parameter("map_rpy", map_rpy);
     this->get_parameter("map_rpy_in_degrees", map_rpy_in_degrees);
+    this->get_parameter("cutoff_hz", cutoff_hz_);
+    this->get_parameter("debug", debug_);
 
     // Publish static transform from map to vicon origin
     if (map_rpy_in_degrees) {
@@ -272,16 +284,20 @@ void Communicator::create_publisher(const string subject_name, const string segm
 void Communicator::create_publisher_thread(const string subject_name, const string segment_name)
 {
     // Construct the topic name and key
-    std::string topic_name = ns_name + "/" + subject_name + "/" + segment_name;
-    std::string key = subject_name + "/" + segment_name;
+    std::string topic_name   = ns_name + "/" + subject_name + "/" + segment_name;
+    std::string key          = subject_name + "/" + segment_name;
+    std::string child_frame  = subject_name + "_" + segment_name;
 
     // Log publisher creation
-    string msg = "Creating publisher for segment " + segment_name + " from subject " + subject_name;
+    string msg = "Creating odometry publisher for segment " + segment_name + " from subject " + subject_name;
     cout << msg << endl;
 
     // Create and store the publisher; then clear the pending flag
     boost::mutex::scoped_lock lock(mutex);
-    pub_map.insert(std::map<std::string, Publisher>::value_type(key, Publisher(topic_name, this)));
+    pub_map.emplace(std::piecewise_construct,
+                    std::forward_as_tuple(key),
+                    std::forward_as_tuple(topic_name, world_frame, child_frame,
+                                          cutoff_hz_, debug_, this));
     pending_publishers.erase(key);
     lock.unlock();
 }

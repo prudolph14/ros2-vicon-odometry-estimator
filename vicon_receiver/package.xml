@@ -1,16 +1,18 @@
 <?xml version="1.0"?>
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
-  <name>vicon_receiver</name>
+  <name>vicon_odometry_estimator</name>
   <version>1.0.0</version>
-  <description>ROS2 package to retrieve data from a Vicon system</description>
+  <description>ROS2 state estimator that turns a Vicon stream into nav_msgs/Odometry with filtered linear/angular velocities. Derived from OPT4SMART/ros2-vicon-receiver (GPL-3.0).</description>
   <maintainer email="info@opt4smart.eu">OPT4SMART group</maintainer>
-  <license>GNU General Public License v3.0</license>
+  <author>Andrea Testa</author>
+  <license>GPL-3.0</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
 
   <depend>rclcpp</depend>
   <depend>geometry_msgs</depend>
+  <depend>nav_msgs</depend>
   <depend>tf2</depend>
   <depend>tf2_ros</depend>
   <depend>tf2_geometry_msgs</depend>

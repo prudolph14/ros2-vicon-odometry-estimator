@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.8)
-project(vicon_receiver)
+project(vicon_odometry_estimator)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -12,6 +12,7 @@ endif()
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(geometry_msgs REQUIRED)
+find_package(nav_msgs REQUIRED)
 find_package(tf2 REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
@@ -94,33 +95,34 @@ set_property(TARGET Boost::thread APPEND PROPERTY
 
 ###########################################################
 # --- Node executable ---
-add_executable(vicon_client
+add_executable(vicon_odometry_estimator
   src/communicator.cpp
   src/publisher.cpp
 )
 
 # Include our public headers when building this target
-target_include_directories(vicon_client PRIVATE
+target_include_directories(vicon_odometry_estimator PRIVATE
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>
 )
 
 # Link dependencies (use imported targets consistently)
-target_link_libraries(vicon_client
+target_link_libraries(vicon_odometry_estimator
   ViconDataStreamSDK::ViconDataStreamSDK_CPP
   Boost::system Boost::thread Boost::chrono Boost::timer
 )
 
-ament_target_dependencies(vicon_client 
+ament_target_dependencies(vicon_odometry_estimator
   rclcpp
   geometry_msgs
+  nav_msgs
   tf2
   tf2_ros
   tf2_geometry_msgs
 )
 
 # Runtime search path so the binary finds libs in the install tree
-set_target_properties(vicon_client PROPERTIES
+set_target_properties(vicon_odometry_estimator PROPERTIES
   INSTALL_RPATH "\$ORIGIN/../lib"
   BUILD_WITH_INSTALL_RPATH OFF
 )
@@ -147,7 +149,7 @@ install(DIRECTORY include/
         DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 
 # install the node and launch files
-install(TARGETS vicon_client RUNTIME 
+install(TARGETS vicon_odometry_estimator RUNTIME
         DESTINATION lib/${PROJECT_NAME})
 
 install(DIRECTORY launch

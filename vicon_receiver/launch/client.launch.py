@@ -46,6 +46,16 @@ def generate_launch_description():
         default_value='false',
         description='Whether RPY values are in degrees (true) or radians (false)'
     )
+    cutoff_hz_arg = DeclareLaunchArgument(
+        'cutoff_hz',
+        default_value='30.0',
+        description='2nd-order Butterworth low-pass cutoff (Hz) for twist; <=0 disables filtering'
+    )
+    debug_arg = DeclareLaunchArgument(
+        'debug',
+        default_value='false',
+        description='If true, also publish unfiltered TwistStamped on <topic>/twist_raw'
+    )
 
     # Get launch configuration values
     hostname = LaunchConfiguration('hostname')
@@ -56,6 +66,8 @@ def generate_launch_description():
     map_xyz = LaunchConfiguration('map_xyz')
     map_rpy = LaunchConfiguration('map_rpy')
     map_rpy_in_degrees = LaunchConfiguration('map_rpy_in_degrees')
+    cutoff_hz = LaunchConfiguration('cutoff_hz')
+    debug = LaunchConfiguration('debug')
 
     return LaunchDescription([
         # Launch arguments
@@ -67,21 +79,25 @@ def generate_launch_description():
         map_xyz_arg,
         map_rpy_arg,
         map_rpy_in_degrees_arg,
-        
+        cutoff_hz_arg,
+        debug_arg,
+
         # Node
         Node(
-            package='vicon_receiver', 
-            executable='vicon_client', 
+            package='vicon_odometry_estimator',
+            executable='vicon_odometry_estimator',
             output='screen',
             parameters=[{
-                'hostname': hostname, 
-                'buffer_size': buffer_size, 
+                'hostname': hostname,
+                'buffer_size': buffer_size,
                 'namespace': topic_namespace,
                 'world_frame': world_frame,
                 'vicon_frame': vicon_frame,
                 'map_xyz': map_xyz,
                 'map_rpy': map_rpy,
-                'map_rpy_in_degrees': map_rpy_in_degrees
+                'map_rpy_in_degrees': map_rpy_in_degrees,
+                'cutoff_hz': cutoff_hz,
+                'debug': debug,
             }]
         )
     ])
