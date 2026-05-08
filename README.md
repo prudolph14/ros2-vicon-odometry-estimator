@@ -63,11 +63,15 @@ This is NOT an official ROS 2 package, but it has been successfully tested with 
 
 - **ROS 2 Jazzy** compatibility
 - **TF publishing:** TF information for tracked subjects is now available
-- **BREAKING:** switched output from a custom message to **`geometry_msgs/msg/PoseStamped`**
+- **BREAKING:** package renamed to **`vicon_odometry_estimator`**, executable renamed to **`vicon_odometry_estimator`**
+- **BREAKING:** output is now **`nav_msgs/msg/Odometry`** (pose + twist in one timestamped message) instead of `geometry_msgs/msg/PoseStamped`
+- New 2nd-order Butterworth low-pass filter on linear and angular velocity, robust to non-uniform Vicon packet timing
+- New `cutoff_hz` and `debug` parameters; debug mode publishes the raw (unfiltered) twist on `<topic>/twist_raw`
 
 ### Migration notes
 
-- Update your subscribers to consume **`geometry_msgs/msg/PoseStamped`** instead of the legacy custom message.
+- Replace `ros2 launch vicon_receiver client.launch.py …` with `ros2 launch vicon_odometry_estimator client.launch.py …`. All previous launch args still work; `cutoff_hz` and `debug` are optional additions.
+- Update your subscribers from `geometry_msgs/msg/PoseStamped` to `nav_msgs/msg/Odometry`. Position/orientation moved from `msg.pose` to `msg.pose.pose`; velocities are available in `msg.twist.twist` (body-frame, per ROS convention).
 
 ---
 
@@ -82,8 +86,8 @@ This is NOT an official ROS 2 package, but it has been successfully tested with 
 
 ## Package layout & executable
 
-- Package name: **`vicon_receiver`**
-- Primary executable: **`vicon_client`** (C++)
+- Package name: **`vicon_odometry_estimator`** (renamed from `vicon_receiver`)
+- Primary executable: **`vicon_odometry_estimator`** (C++; previously `vicon_client`)
 - Launch file: **`client.launch.py`**
 
 ---
@@ -125,18 +129,22 @@ This is NOT an official ROS 2 package, but it has been successfully tested with 
     ```bash
     source install/setup.bash
 
-    ros2 launch vicon_receiver client.launch.py  \
-      hostname:=192.168.10.1                     \
-      topic_namespace:=vicon                     \
-      buffer_size:=200                           \
-      world_frame:=map                           \
-      vicon_frame:=vicon                         \
-      map_xyz:='[0.0, 0.0, 0.0]'                 \
-      map_rpy:='[0.0, 0.0, 0.0]'                 \
-      map_rpy_in_degrees:=false
+    ros2 launch vicon_odometry_estimator client.launch.py \
+      hostname:=192.168.10.1                              \
+      topic_namespace:=vicon                              \
+      buffer_size:=200                                    \
+      world_frame:=map                                    \
+      vicon_frame:=vicon                                  \
+      map_xyz:='[0.0, 0.0, 0.0]'                          \
+      map_rpy:='[0.0, 0.0, 0.0]'                          \
+      map_rpy_in_degrees:=false                           \
+      cutoff_hz:=30.0                                     \
+      debug:=false
     ```
 
-5. After the ros2-vicon-receiver node is running you can:
+    > Migrating from the original `vicon_receiver`? Only the package and executable names changed (`vicon_receiver` → `vicon_odometry_estimator`, `vicon_client` → `vicon_odometry_estimator`). The original launch arguments still work; `cutoff_hz` and `debug` are new and optional.
+
+5. After the node is running you can:
 
    - Visualize streamed pose data in RViz2: add a TF display and/or Pose displays for the published topics.
    - Inspect raw messages directly: `ros2 topic list`, then `ros2 topic echo /vicon/<subject_name>/<segment_name>` (adjust topic name as provided by the node).
@@ -198,18 +206,20 @@ Follow these host steps if you prefer a native (non‑container) setup. Assumes 
 7. Launch the client (adjust parameters to your setup):
 
     ```bash
-    ros2 launch vicon_receiver client.launch.py   \
-      hostname:=192.168.10.1                      \
-      topic_namespace:=vicon                      \
-      buffer_size:=200                            \
-      world_frame:=map                            \
-      vicon_frame:=vicon                          \
-      map_xyz:='[0.0, 0.0, 0.0]'                  \
-      map_rpy:='[0.0, 0.0, 0.0]'                  \
-      map_rpy_in_degrees:=false
+    ros2 launch vicon_odometry_estimator client.launch.py \
+      hostname:=192.168.10.1                              \
+      topic_namespace:=vicon                              \
+      buffer_size:=200                                    \
+      world_frame:=map                                    \
+      vicon_frame:=vicon                                  \
+      map_xyz:='[0.0, 0.0, 0.0]'                          \
+      map_rpy:='[0.0, 0.0, 0.0]'                          \
+      map_rpy_in_degrees:=false                           \
+      cutoff_hz:=30.0                                     \
+      debug:=false
     ```
 
-8. After the ros2-vicon-receiver node is running you can:
+8. After the node is running you can:
 
    - Visualize streamed pose data in RViz2: add a TF display and/or Pose displays for the published topics.
    - Inspect raw messages directly: `ros2 topic list`, then `ros2 topic echo /vicon/<subject_name>/<segment_name>` (adjust topic name as provided by the node).
@@ -233,6 +243,8 @@ Follow these host steps if you prefer a native (non‑container) setup. Assumes 
 | `map_xyz`             | list[3]  | `[0.0, 0.0, 0.0]` | XYZ translation applied when mapping Vicon frame → World frame |
 | `map_rpy`             | list[3]  | `[0.0, 0.0, 0.0]` | Roll‑Pitch‑Yaw rotation applied when mapping Vicon frame → World frame |
 | `map_rpy_in_degrees`  | bool     | `false`           | Interpret `map_rpy` as degrees (`true`) or radians (`false`) |
+| `cutoff_hz`           | double   | `30.0`            | 2nd-order Butterworth low-pass cutoff (Hz) for the twist; `<= 0` disables filtering |
+| `debug`               | bool     | `false`           | Also publish unfiltered `geometry_msgs/TwistStamped` on `<topic>/twist_raw` for phase-lag vs noise comparison |
 
 > These launch arguments pass through to node parameters (see below). Note the node parameter name for the namespace is `namespace`.
 
@@ -248,6 +260,8 @@ Follow these host steps if you prefer a native (non‑container) setup. Assumes 
 | `map_xyz`           | list[3]  | `[0.0, 0.0, 0.0]` | XYZ translation applied for frame mapping |
 | `map_rpy`           | list[3]  | `[0.0, 0.0, 0.0]` | RPY rotation applied for frame mapping |
 | `map_rpy_in_degrees`| bool     | `false`           | Interpret `map_rpy` as degrees or radians |
+| `cutoff_hz`         | double   | `30.0`            | 2nd-order Butterworth low-pass cutoff (Hz) for twist; `<= 0` disables filtering |
+| `debug`             | bool     | `false`           | Also publish unfiltered `geometry_msgs/TwistStamped` on `<topic>/twist_raw` |
 
 ### Published topics
 
@@ -266,7 +280,10 @@ Examples:
 
 #### Message types
 
-- **Pose per tracked entity:** `geometry_msgs/msg/PoseStamped`
+- **Odometry per tracked entity:** `nav_msgs/msg/Odometry` on `/<namespace>/<subject_name>/<segment_name>`
+  - `pose.pose` is expressed in `world_frame` (header `frame_id`).
+  - `twist.twist` is expressed in the body frame (`child_frame_id = <subject>_<segment>`), per the ROS Odometry convention. Linear and angular velocity are obtained from finite-differencing the pose stream and a 2nd-order Butterworth low-pass with non-uniform-`dt` handling.
+- **Raw twist (debug only):** `geometry_msgs/msg/TwistStamped` on `/<namespace>/<subject_name>/<segment_name>/twist_raw` when `debug:=true`. Same body-frame convention, but unfiltered, useful to compare phase lag vs noise suppression in rqt_plot.
 - **TF:** dynamic transforms for each `<subject_name>_<segment_name>` frame (see TF tree section below).
 
 #### Notes
@@ -276,16 +293,18 @@ Examples:
 
 #### QoS
 
-- Standard reliable QoS suitable for state estimation (defaults appropriate for `PoseStamped`).
+- Standard reliable QoS suitable for state estimation (defaults appropriate for `Odometry`).
 
 #### Example topic tree
 
 ```bash
 /vicon/
 ├── qcar/
-│   └── qcar [geometry_msgs/PoseStamped]
+│   ├── qcar            [nav_msgs/Odometry]
+│   └── qcar/twist_raw  [geometry_msgs/TwistStamped]   # only if debug:=true
 └── cf0/
-    └── cf0 [geometry_msgs/PoseStamped]
+    ├── cf0             [nav_msgs/Odometry]
+    └── cf0/twist_raw   [geometry_msgs/TwistStamped]   # only if debug:=true
 ```
 
 ## Frames & mapping
